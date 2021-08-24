@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -223,4 +224,45 @@ func assertContentType(t *testing.T, response *httptest.ResponseRecorder, want s
 	if response.Result().Header.Get("content-type") != "application/json" {
 		t.Errorf("response did not have content-type of application/json, got %v", response.Result().Header)
 	}
+}
+
+func assertScoreEquals(t *testing.T, got int, want int) {
+	if got != want {
+		t.Errorf("got %d want %d", got, want)
+	}
+}
+
+func TestFileSystemStore(t *testing.T) {
+	t.Run("/league from a reader", func(t *testing.T) {
+		database := strings.NewReader(`[
+			{"Name": "Cleo", "Wins": 10},
+			{"Name": "Chris", "Wins": 33}
+		]`)
+		store := FileSystemPlayerStore{database}
+
+		got := store.GetLeague()
+
+		want := []Player{
+			{"Cleo", 10},
+			{"Chris", 33},
+		}
+
+		assertLeague(t, got, want)
+		got = store.GetLeague()
+		assertLeague(t, got, want)
+	})
+
+	t.Run("get player score", func(t *testing.T) {
+		database := strings.NewReader(`[
+			{"Name": "Cleo", "Wins": 10},
+			{"Name": "Chris", "Wins": 33}
+		]`)
+
+		store := FileSystemPlayerStore{database}
+		got := store.GetPlayerScore("Chris")
+
+		want := 33
+
+		assertScoreEquals(t, got, want)
+	})
 }
