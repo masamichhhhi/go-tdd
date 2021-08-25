@@ -3,14 +3,15 @@ package server
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
+	"os"
+	"sort"
 )
 
 type PlayerStore interface {
 	GetPlayerScore(name string) int
 	RecordWin(name string)
-	GetLeague() []Player
+	GetLeague() League
 }
 
 type PlayerServer struct {
@@ -43,8 +44,8 @@ func (p *PlayerServer) leagueHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func getLeagueTable() []Player {
-	return []Player{
+func getLeagueTable() League {
+	return League{
 		{"Chris", 20},
 	}
 }
@@ -76,23 +77,71 @@ func (p *PlayerServer) processWin(w http.ResponseWriter, player string) {
 }
 
 type FileSystemPlayerStore struct {
-	database io.ReadSeeker
+	Database *json.Encoder
+	League   League
 }
 
-func (f *FileSystemPlayerStore) GetLeague() []Player {
-	f.database.Seek(0, 0)
-	league, _ := NewLeague(f.database)
-	return league
+func NewFileSystemPlayerStore(file *os.File) (*FileSystemPlayerStore, error) {
+	err := initializePlayerDBFile(file)
+
+	if err != nil {
+		return nil, fmt.Errorf("problem loading player store from file %s, %v", file.Name(), err)
+	}
+
+	league, err := NewLeague(file)
+
+	if err != nil {
+		return nil, fmt.Errorf("problem loading player store from file %s, %v", file.Name(), err)
+	}
+
+	return &FileSystemPlayerStore{
+		Database: json.NewEncoder(&tape{file}),
+		League:   league,
+	}, nil
+
+}
+
+func initializePlayerDBFile(file *os.File) error {
+	file.Seek(0, 0)
+
+	info, err := file.Stat()
+	if err != nil {
+		return fmt.Errorf("problem getting file info from file %s, %v", file.Name(), err)
+	}
+
+	if info.Size() == 0 {
+		file.Write([]byte("[]"))
+		file.Seek(0, 0)
+	}
+
+	return nil
+}
+
+func (f *FileSystemPlayerStore) GetLeague() League {
+	sort.Slice(f.League, func(i, j int) bool {
+		return f.League[i].Wins > f.League[j].Wins
+	})
+
+	return f.League
 }
 
 func (f *FileSystemPlayerStore) GetPlayerScore(name string) int {
-	var wins int
+	player := f.League.Find(name)
 
-	for _, player := range f.GetLeague() {
-		if player.Name == name {
-			wins = player.Wins
-			break
-		}
+	if player != nil {
+		return player.Wins
 	}
-	return wins
+	return 0
+}
+
+func (f *FileSystemPlayerStore) RecordWin(name string) {
+	player := f.League.Find(name)
+
+	if player != nil {
+		player.Wins++
+	} else {
+		f.League = append(f.League, Player{name, 1})
+	}
+
+	f.Database.Encode(f.League)
 }
