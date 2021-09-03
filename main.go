@@ -1,8 +1,8 @@
 package main
 
 import (
+	"fmt"
 	"log"
-	"net/http"
 	"os"
 
 	"github.com/masamichhhhi/go-tdd/server"
@@ -11,21 +11,21 @@ import (
 const dbFileName = "game.db.json"
 
 func main() {
-	// O_RDWR: 読み書き権限 　O_CREATE: ファイルが存在しない場合に作成する
-	db, err := os.OpenFile(dbFileName, os.O_RDWR|os.O_CREATE, 0666)
+	store, close, err := server.FileSystemPlayerStoreFromFile(dbFileName)
 
 	if err != nil {
-		log.Fatalf("proble, opening %s %v", dbFileName, err)
+		log.Fatal(err)
 	}
+	defer close()
 
-	store, err := server.NewFileSystemPlayerStore(db)
-	if err != nil {
-		log.Fatalf("problem creating file system player store, %v ", err)
-	}
+	fmt.Println("Let's play poker")
+	fmt.Println("Type {Name} wins to record a win")
 
-	server := server.NewPlayerServer(store)
+	server.NewCLI(store, os.Stdin).PlayerPoker()
 
-	if err := http.ListenAndServe(":5000", server); err != nil {
-		log.Fatalf("could not listen on port 5000 %v", err)
-	}
+	// server := server.NewPlayerServer(store)
+
+	// if err := http.ListenAndServe(":5000", server); err != nil {
+	// 	log.Fatalf("could not listen on port 5000 %v", err)
+	// }
 }

@@ -1,25 +1,31 @@
-package server
+package server_test
 
 import (
 	"strings"
 	"testing"
+
+	"github.com/masamichhhhi/go-tdd/server"
 )
 
 func TestCLI(t *testing.T) {
-	in := strings.NewReader("Chris wins\n")
-	playerStore := &StubPlayerStore{}
+	t.Run("record chris win from user input", func(t *testing.T) {
+		in := strings.NewReader("Chris wins\n")
+		playerStore := &server.StubPlayerStore{}
 
-	cli := &CLI{playerStore, in}
-	cli.PlayerPoker()
+		cli := server.NewCLI(playerStore, in)
+		cli.PlayerPoker()
 
-	assertPlayerWin(t, playerStore, "Chris")
-	// if len(playerStore.winCalls) < 1 {
-	// 	t.Fatal("expected a win call but didn't get any")
-	// }
+		server.AssertPlayerWin(t, playerStore, "Chris")
+	})
 
-	// got := playerStore.winCalls[0]
-	// want := "Chris"
-	// if got != want {
-	// 	t.Errorf("didn't record correct winner, got %q, want %q", got, want)
-	// }
+	t.Run("record cleo win from user input", func(t *testing.T) {
+		in := strings.NewReader("Cleo wins\n")
+		playerStore := &server.StubPlayerStore{}
+
+		cli := server.NewCLI(playerStore, in)
+		cli.PlayerPoker()
+
+		server.AssertPlayerWin(t, playerStore, "Cleo")
+	})
+
 }
