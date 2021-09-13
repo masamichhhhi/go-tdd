@@ -9,7 +9,11 @@ import (
 	"net/http/httptest"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 func TestStoreWins(t *testing.T) {
@@ -18,7 +22,7 @@ func TestStoreWins(t *testing.T) {
 		[]string{},
 		League{},
 	}
-	server := NewPlayerServer(&store)
+	server, _ := NewPlayerServer(&store)
 
 	t.Run("it records wins when POST", func(t *testing.T) {
 		player := "Pepper"
@@ -84,7 +88,7 @@ func TestRecordingWinsAndRetrievingThem(t *testing.T) {
 	store, err := NewFileSystemPlayerStore(database)
 	assertNoError(t, err)
 
-	server := NewPlayerServer(store)
+	server, _ := NewPlayerServer(store)
 	player := "Pepper"
 
 	server.ServeHTTP(httptest.NewRecorder(), newPostWinRequest(player))
@@ -140,7 +144,7 @@ func newPostWinRequest(name string) *http.Request {
 
 func TestLeague(t *testing.T) {
 	store := StubPlayerStore{}
-	server := NewPlayerServer(&store)
+	server, _ := NewPlayerServer(&store)
 
 	t.Run("it returns 200 on /league", func(t *testing.T) {
 		request, _ := http.NewRequest(http.MethodGet, "/league", nil)
@@ -167,7 +171,7 @@ func TestLeague(t *testing.T) {
 		}
 
 		store := StubPlayerStore{nil, nil, wantedLeague}
-		server := NewPlayerServer(&store)
+		server, _ := NewPlayerServer(&store)
 
 		request := newLeagueRequest()
 		response := httptest.NewRecorder()
@@ -303,7 +307,7 @@ func TestFileSystemStore(t *testing.T) {
 
 func TestGame(t *testing.T) {
 	t.Run("GET /game returns 200", func(t *testing.T) {
-		server := NewPlayerServer(&StubPlayerStore{})
+		server, _ := NewPlayerServer(&StubPlayerStore{})
 
 		request := newGameRequest()
 		response := httptest.NewRecorder()
@@ -311,6 +315,30 @@ func TestGame(t *testing.T) {
 		server.ServeHTTP(response, request)
 
 		assertStatus(t, response.Code, http.StatusOK)
+	})
+
+	t.Run("when we get a message over a websocket it is a winner of a game ", func(t *testing.T) {
+		store := &StubPlayerStore{}
+		winner := "Ruth"
+		playerServer, _ := NewPlayerServer(store)
+		server := httptest.NewServer(playerServer)
+		defer server.Close()
+
+		wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws"
+
+		ws, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+		if err != nil {
+			t.Fatalf("could not open a ws connection on %s %v", wsURL, err)
+		}
+		defer ws.Close()
+
+		if err := ws.WriteMessage(websocket.TextMessage, []byte(winner)); err != nil {
+			t.Fatalf("could not send message over ws connection %v", err)
+		}
+
+		time.Sleep(10 * time.Millisecond)
+
+		AssertPlayerWin(t, store, winner)
 	})
 }
 
@@ -343,4 +371,22 @@ func assertNoError(t *testing.T, err error) {
 func newGameRequest() *http.Request {
 	req, _ := http.NewRequest(http.MethodGet, "/game", nil)
 	return req
+}
+
+func mustDialWS(t *testing.T, url string) *websocket.Conn {
+	ws, _, err := websocket.DefaultDialer.Dial(url, nil)
+
+	if err != nil {
+		t.Fatalf("could not open a ws connection on %s %v", url, err)
+	}
+
+	return ws
+}
+
+func writeWSMessage(t *testing.T, conn *websocket.Conn, message string) {
+	t.Helper()
+
+	if err := conn.WriteMessage(websocket.TextMessage, []byte(message)); err != nil {
+		t.Fatalf("could not send message over ws connection %v", err)
+	}
 }

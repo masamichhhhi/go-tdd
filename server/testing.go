@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"io"
 	"testing"
 	"time"
 )
@@ -52,6 +53,6 @@ type SpyBlindAlerter struct {
 }
 
 // ScheduleAlertAt records alerts that have been scheduled.
-func (s *SpyBlindAlerter) ScheduledAlertAt(at time.Duration, amount int) {
+func (s *SpyBlindAlerter) ScheduledAlertAt(at time.Duration, amount int, to io.Writer) {
 	s.Alerts = append(s.Alerts, ScheduledAlert{at, amount})
 }
