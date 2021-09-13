@@ -301,6 +301,19 @@ func TestFileSystemStore(t *testing.T) {
 	})
 }
 
+func TestGame(t *testing.T) {
+	t.Run("GET /game returns 200", func(t *testing.T) {
+		server := NewPlayerServer(&StubPlayerStore{})
+
+		request := newGameRequest()
+		response := httptest.NewRecorder()
+
+		server.ServeHTTP(response, request)
+
+		assertStatus(t, response.Code, http.StatusOK)
+	})
+}
+
 func createTempFile(t *testing.T, initialData string) (*os.File, func()) {
 	t.Helper()
 
@@ -325,4 +338,9 @@ func assertNoError(t *testing.T, err error) {
 	if err != nil {
 		t.Fatalf("didn't expect an error but got one, %v", err)
 	}
+}
+
+func newGameRequest() *http.Request {
+	req, _ := http.NewRequest(http.MethodGet, "/game", nil)
+	return req
 }
